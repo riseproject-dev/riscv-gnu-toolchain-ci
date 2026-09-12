@@ -58,13 +58,13 @@ def parse_arguments():
 
 
 def get_comment(token: str, comment: str, check: str, repo: str):
-    params = {
+    headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"token {token}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     url = f"https://api.github.com/repos/{repo}/issues/comments/{comment}"
-    r = requests.get(url, params)
+    r = requests.get(url, headers=headers)
     print(f"status code: {r.status_code}")
     found_comment = json.loads(r.text)
     if "body" not in found_comment.keys():

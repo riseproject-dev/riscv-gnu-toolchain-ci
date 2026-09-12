@@ -1,9 +1,12 @@
 import argparse
-import requests
 import json
 import os
-from collections import defaultdict
-from typing import Dict, List, Set
+
+import requests
+
+
+PATCHWORK_TEST_CONTEXT = "toolchain-ci-rise-test"
+PATCHWORK_FINAL_STATES = {"success", "fail", "warning"}
 
 
 def parse_arguments():
@@ -31,13 +34,24 @@ def make_api_request(url):
     return r.headers, json.loads(r.text)
 
 
-def check_patch(patch):
+def get_patchwork_check_username():
+    username = os.environ.get("PATCHWORK_CHECK_USERNAME", "").strip()
+    if not username:
+        raise RuntimeError(
+            "PATCHWORK_CHECK_USERNAME must name the Patchwork account used by CI"
+        )
+    return username
+
+
+def check_patch(patch, check_username=None):
     url = patch["checks"]
+    if check_username is None:
+        check_username = get_patchwork_check_username()
     # Check if patch has been seen by ci
     checks = [
         check
         for check in make_api_request(url)[1]
-        if check["user"]["username"] == "rivoscibot"
+        if check["user"]["username"] == check_username
     ]
 
     # first three checks should be lint start/finish and apply
@@ -50,32 +64,35 @@ def check_patch(patch):
     for check in checks:
         if check["description"] == "Patch failed to apply":
             apply_failure = True
-        if check["context"] == "toolchain-ci-rivos-test":
-            testsuite_report = True
+        if (
+            check["context"] == PATCHWORK_TEST_CONTEXT
+            and check.get("state") in PATCHWORK_FINAL_STATES
+        ):
+            testsuite_reported = True
 
     # If testsuite was not reported, mark for rerun
     # testsuite should be reported as long as it was applied
     # and run has completed (enough time has passed)
-    if apply_failure and testsuite_reported:
-        return True
-
-    return False
+    return not apply_failure and not testsuite_reported
 
 
 def get_patches(start: str, end: str):
+    check_username = get_patchwork_check_username()
     page_num = 1
     patches = []
     while True:
         url = f"https://patchwork.sourceware.org/api/1.3/patches/?order=date&q=RISC-V&project=6&since={start}&before={end}&page={page_num}"
         headers, page = make_api_request(url)
         patches += page
-        if 'rel="next"' not in headers["Link"]:
+        if 'rel="next"' not in headers.get("Link", ""):
             break
         page_num += 1
 
     print([patch["id"] for patch in patches])
 
-    to_run = [str(patch["id"]) for patch in patches if check_patch(patch)]
+    to_run = [
+        str(patch["id"]) for patch in patches if check_patch(patch, check_username)
+    ]
     print(to_run)
     if to_run:
         with open("patch_numbers_to_run.txt", "w") as f:

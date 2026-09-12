@@ -1,6 +1,8 @@
-import requests
 import argparse
+import os
 from typing import Dict
+
+import requests
 
 
 def parse_arguments():
@@ -25,9 +27,11 @@ def parse_arguments():
         "-token",
         "--token",
         metavar="<string>",
-        required=True,
+        default="",
+        nargs="?",
+        const="",
         type=str,
-        help="Patchworks api token",
+        help="Patchwork API token (required when reporting is enabled)",
     )
     parser.add_argument(
         "-state",
@@ -87,13 +91,18 @@ def create_data(desc: str, issue: str, rid: str, state: str, context: str, repo:
     data = {
         "state": state,
         "target_url": target_url,
-        "context": f"toolchain-ci-rivos-{context}",
+        "context": f"toolchain-ci-rise-{context}",
         "description": desc,
     }
     return data
 
 
 def create_headers(token: str):
+    if not token.strip() or token == "PLACEHOLDER":
+        raise RuntimeError(
+            "PATCHWORK_REPORTING_ENABLED is true, but no usable Patchwork API "
+            "token was provided"
+        )
     headers = {"Authorization": f"Token {token}"}
     return headers
 
@@ -106,10 +115,27 @@ def send(patch_id: str, data: Dict[str, str], headers: Dict[str, str]):
     response = requests.post(url, data=data, headers=headers)
     print(response.status_code)
     print(response.text)
+    if not 200 <= response.status_code < 300:
+        raise RuntimeError(
+            f"Patchwork check POST failed with HTTP {response.status_code}: "
+            f"{response.text[:500]}"
+        )
+
+
+def patchwork_reporting_enabled():
+    return os.environ.get("PATCHWORK_REPORTING_ENABLED") == "true"
 
 
 def main():
     args = parse_arguments()
+    if not patchwork_reporting_enabled():
+        print(
+            "PATCHWORK_REPORTING_ENABLED is not exactly 'true'; "
+            "skipping Patchwork check post."
+        )
+        return
+
+    headers = create_headers(args.token)
     data = create_data(
         args.description,
         args.issue_id,
@@ -118,13 +144,9 @@ def main():
         args.context,
         args.repo,
     )
-    headers = create_headers(args.token)
     print(f"data: {data}")
     print(args.event_name)
-    if (
-        args.event_name in {"schedule", "workflow_dispatch", "issue_comment"}
-        and args.token != "PLACEHOLDER"
-    ):
+    if args.event_name in {"schedule", "workflow_dispatch", "issue_comment"}:
         send(args.patch_id, data, headers)
 
 

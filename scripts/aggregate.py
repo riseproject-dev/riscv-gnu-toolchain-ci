@@ -5,6 +5,33 @@ from typing import Dict, List, Set, Tuple
 
 SUMMARIES = "./summaries"
 FAILURES = "./current_logs"
+SUMMARY_MARKERS = (
+    "# Summary",
+    "|Resolved Failures|",
+    "|Unresolved Failures|",
+    "|New Failures|",
+    "# Resolved Failures",
+    "# Unresolved Failures",
+    "# New Failures",
+)
+
+
+def is_valid_summary_file(file_name: str):
+    """Check that an aggregate input has all generated sections in order."""
+    with open(file_name, "r") as summary_file:
+        lines = summary_file.readlines()
+
+    marker_positions = []
+    for marker in SUMMARY_MARKERS:
+        position = next(
+            (index for index, line in enumerate(lines) if line.startswith(marker)),
+            None,
+        )
+        if position is None:
+            return False
+        marker_positions.append(position)
+
+    return marker_positions == sorted(marker_positions)
 
 
 def get_additional_failures(file_name: str, failure_name: str, seen_failures: Set[str]):
@@ -60,12 +87,7 @@ def failures_to_summary(failures: Dict[str, List[str]]):
 
     print(result)
 
-    # Add an invalid label when no failures are detected. Something probably went wrong.
-    no_failures = (
-        len(build_failures) == 0 and len(testsuite_failures) == 0 and len(failures) == 0
-    )
-
-    return result, no_failures
+    return result
 
 
 def assign_labels(file_name: str, label: str):
@@ -81,6 +103,8 @@ def failures_to_markdown(
     current_hash: str,
     patch_name: str,
     title_prefix: str,
+    summaries_processed: int,
+    invalid_inputs: bool = False,
 ):
     result = f"""---
 title: {title_prefix} {current_hash if patch_name == "" else patch_name}
@@ -94,9 +118,10 @@ title: {title_prefix} {current_hash if patch_name == "" else patch_name}
         labels.add("resolved-regressions")
     if "" in labels:
         labels.remove("")
-    summary, no_failures = failures_to_summary(failures)
-    if no_failures:
-        # Something went wrong
+    summary = failures_to_summary(failures)
+    if summaries_processed < 1 or invalid_inputs:
+        # A genuinely empty result is valid, but no summary input means the
+        # aggregation pipeline did not produce anything to inspect.
         labels.add("invalid")
     if len(labels) > 0:
         result += f"labels: {', '.join(labels)}\n"
@@ -312,17 +337,40 @@ def main():
     all_resolved: Dict[str, Dict[str, Set[str]]] = {}
     all_unresolved: Dict[str, Dict[str, Set[str]]] = {}
     all_new: Dict[str, Dict[str, Set[str]]] = {}
+    summaries_processed = 0
+    invalid_inputs = False
+    expected_summaries = {
+        f"{name.split('.')[0]}-summary.md"
+        for name in os.listdir(FAILURES)
+        if name.endswith("-report.log") and os.path.isfile(os.path.join(FAILURES, name))
+    }
     for file in os.listdir(SUMMARIES):
-        failures, resolved, unresolved, new = aggregate_summary(
-            failures, os.path.join(SUMMARIES, file)
-        )
+        summary_path = os.path.join(SUMMARIES, file)
+        if not os.path.isfile(summary_path):
+            continue
+        if not is_valid_summary_file(summary_path):
+            print(f"Skipping invalid summary input: {summary_path}")
+            invalid_inputs = True
+            continue
+        failures, resolved, unresolved, new = aggregate_summary(failures, summary_path)
+        summaries_processed += 1
         all_resolved[file] = resolved
         all_unresolved[file] = unresolved
         all_new[file] = new
 
+    missing_summaries = expected_summaries - all_new.keys()
+    if missing_summaries:
+        print(f"Missing summaries for current logs: {sorted(missing_summaries)}")
+        invalid_inputs = True
+
     print([i.keys() for i in all_new.values()])
     summary_markdown = failures_to_markdown(
-        failures, args.current_hash, args.patch_name, args.title_prefix
+        failures,
+        args.current_hash,
+        args.patch_name,
+        args.title_prefix,
+        summaries_processed,
+        invalid_inputs,
     )
     resolved_markdown = additional_failures_to_markdown(
         "Resolved", all_resolved, len(failures["Unresolved"])

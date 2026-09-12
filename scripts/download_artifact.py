@@ -38,8 +38,8 @@ def search_for_artifact(
 ) -> "str | None":
     """
     Search for the given artifact.
-    If multiple artifacts with that name exist, grab the first returned by the
-    API.
+    If multiple artifacts with that name exist, use the first unexpired one
+    returned by the API, including later pages when necessary.
     Returns the artifact's id or None if the artifact was not found.
     """
     if github is None:
@@ -48,9 +48,9 @@ def search_for_artifact(
 
     repo = github.get_repo(repo_name)
 
-    artifacts = repo.get_artifacts(artifact_name).get_page(0)
-    if len(artifacts) != 0:
-        return str(artifacts[0].id)
+    for artifact in repo.get_artifacts(artifact_name):
+        if not artifact.expired:
+            return str(artifact.id)
 
     return None
 
@@ -73,6 +73,12 @@ def download_artifact(
         timeout=15 * 60,  # 15 minute timeout
     )
     print(f"download for {artifact_name}: {response.status_code}")
+    if response.status_code != 200:
+        raise requests.HTTPError(
+            f"Could not download artifact {artifact_name} ({artifact_id}) from "
+            f"{repo}: HTTP {response.status_code}",
+            response=response,
+        )
 
     artifact_zip_name = artifact_name.replace(".log", ".zip")
 

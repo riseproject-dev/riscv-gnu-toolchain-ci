@@ -48,16 +48,18 @@ def parse_arguments():
 
 
 def get_workflow_runs(token: str, repo: str, workflow: str):
-    params = {
+    headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"token {token}",
         "X-GitHub-Api-Version": "2022-11-28",
+    }
+    params = {
         "branch": "main",
         "event": "schedule",
         "per_page": 100,
     }
     url = f"https://api.github.com/repos/{repo}/actions/runs"
-    r = requests.get(url, params)
+    r = requests.get(url, headers=headers, params=params)
     if r.status_code >= 500:
         with open("patchwork_down.txt", "w") as f:
             f.write(f"status code: {r.status_code}")
@@ -118,6 +120,9 @@ def write_run_id(runs, run_id: str, run_index: int):
     assert str(runs[run_index]["id"]) == str(
         run_id
     ), f"The 10 most recent runs are: \n{runs[:10]}"
+    if run_index + 1 >= len(runs):
+        print("No previous scheduled run; using a 15-minute bootstrap window")
+        return
     with open("run_id.txt", "w") as f:
         f.write(str(runs[run_index + 1]["id"]))
 
@@ -141,9 +146,10 @@ def main():
         # timestamp this causes the output timestamp to have an additional
         # +00:00 appended to the rounded timestamps which breaks
         # create_patches_files.py api request
-        write_timestamps(
-            runs[run_index]["created_at"][:-1], runs[run_index + 1]["created_at"][:-1]
+        previous_time = (
+            runs[run_index + 1]["created_at"][:-1] if run_index + 1 < len(runs) else ""
         )
+        write_timestamps(runs[run_index]["created_at"][:-1], previous_time)
     else:
         write_timestamps(args.timestamp)
 

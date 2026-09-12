@@ -240,8 +240,8 @@ def get_possible_artifact_names(prefix: str) -> List[str]:
     frequent_prefix = [
         "",
         "coord_",
-        "release_14_",
         "release_15_",
+        "release_16_",
     ]
     if prefix in frequent_prefix:
         return get_frequent_names(prefix)
@@ -407,7 +407,6 @@ def download_build_log_artifact(
     # Check if the artifact name exists inside the output directory
     previous_build_log_path = Path(f"./{output_dir}/{artifact_name}")
     if previous_build_log_path.exists():
-        # Remove this line and uncomment the print, return line if build log artifact is downloaded more than once in the future. https://github.com/patrick-rivos/riscv-gnu-toolchain/pull/526#discussion_r1647981167
         raise RuntimeError("Build log artifact is currently downloaded only once.")
         # print(f"This artifact already exists in {previous_build_log_path}. Skip download.")
         # return

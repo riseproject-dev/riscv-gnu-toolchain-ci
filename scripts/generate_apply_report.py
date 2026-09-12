@@ -1,4 +1,10 @@
 import argparse
+import os
+
+
+DEFAULT_POSTCOMMIT_REPOSITORY = os.environ.get(
+    "POSTCOMMIT_REPOSITORY", "riseproject-dev/gcc-postcommit-ci"
+)
 
 
 def parse_arguments():
@@ -51,6 +57,13 @@ def parse_arguments():
         type=str,
         help="Output file name",
     )
+    parser.add_argument(
+        "--postcommit-repo",
+        default=DEFAULT_POSTCOMMIT_REPOSITORY,
+        metavar="<owner/repo>",
+        type=str,
+        help="Post-commit repository used for baseline issue links",
+    )
     return parser.parse_args()
 
 
@@ -82,7 +95,12 @@ def git_log_wrapper(logfile: str, hash: str):
 
 
 def generate_report(
-    patch_name: str, bhash: str, thash: str, bstatus: str, tstatus: str
+    patch_name: str,
+    bhash: str,
+    thash: str,
+    bstatus: str,
+    tstatus: str,
+    postcommit_repo: str = DEFAULT_POSTCOMMIT_REPOSITORY,
 ):
     result = ""
     if bstatus != "pending":
@@ -108,14 +126,17 @@ def generate_report(
     elif bstatus == "Failed" and tstatus == "Applied":
         result += git_log_wrapper("gcc/git_log_tot.txt", thash)
         result += "## Notes\n"
-        result += f"""Failed to apply to the [post-commit baseline](https://github.com/patrick-rivos/gcc-postcommit-ci/issues?q=is%3Aissue+{bhash}). This can happen
+        baseline_url = (
+            f"https://github.com/{postcommit_repo}/issues?q=is%3Aissue+{bhash}"
+        )
+        result += f"""Failed to apply to the [post-commit baseline]({baseline_url}). This can happen
 if your commit requires a recently-commited patch in order to apply.
 The pre-commit CI will only perform a build since it doesn't know what
 dejagnu testsuite failures are expected on the tip-of-tree.
 
-If you would like us to re-run this patch once the [baseline](https://github.com/patrick-rivos/gcc-postcommit-ci/issues?q=is%3Aissue) reaches a
-different hash, please email us at patchworks-ci@rivosinc.com with a link
-to your patch.
+If you would like this patch re-run once the [baseline]({baseline_url}) reaches a
+different hash, open an issue in the RISE pre-commit CI repository with a link
+to your patch and the desired baseline.
 """
     elif bstatus == "Applied" and tstatus == "Failed":
         result += git_log_wrapper("gcc/git_log_bl.txt", bhash)
@@ -142,6 +163,7 @@ def main():
         args.tree_hash,
         args.base_status,
         args.tree_status,
+        args.postcommit_repo,
     )
     with open(args.output_markdown, "w") as f:
         f.write(issue)
