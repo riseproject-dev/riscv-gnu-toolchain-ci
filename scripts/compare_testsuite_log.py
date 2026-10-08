@@ -6,12 +6,12 @@ from typing import List, Dict, Tuple
 from collections import Counter, defaultdict
 
 compare_urls = defaultdict(lambda: "https://github.com/gcc-mirror/gcc/compare/{}...{}")
-compare_urls["binutils_"] = "https://github.com/bminor/binutils-gdb/compare/{}...{}"
+compare_urls["binutils_"] = "https://github.com/gnutools/binutils-gdb/compare/{}...{}"
 compare_urls["glibc_"] = "https://github.com/bminor/glibc/compare/{}...{}"
 compare_urls["coord_"] = "https://gcc.gnu.org/cgit/gcc/log/?qt=range&q={}...{}"
 
 commit_urls = defaultdict(lambda: "https://github.com/gcc-mirror/gcc/commit/{}")
-commit_urls["binutils_"] = "https://github.com/bminor/binutils-gdb/commit/{}"
+commit_urls["binutils_"] = "https://github.com/gnutools/binutils-gdb/commit/{}"
 commit_urls["glibc_"] = "https://github.com/bminor/glibc/commit/{}"
 commit_urls["coord_"] = "https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h={}"
 
