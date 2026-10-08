@@ -52,6 +52,24 @@ is deliberately independent of the checks required to merge the toolchain PR.
 
 ## Repository Configuration
 
+### Source mirrors and checkout retries
+
+The binutils/GDB, glibc, newlib and musl URLs follow upstream
+[riscv-gnu-toolchain#1891](https://github.com/riscv-collab/riscv-gnu-toolchain/pull/1891):
+`gnutools/binutils-gdb`, `gnutools/glibc`, `cygwin/cygwin` and `kraj/musl`.
+DejaGnu stays on Savannah. The mirror change does not change any gitlink SHA.
+
+Both parent CI repositories initialize their required dependencies with
+`bash scripts/update_ci_submodules.sh binutils dejagnu gdb glibc newlib qemu`.
+This synchronizes existing submodule URLs and retries checkout up to five
+times, with 30/60/90/120-second delays, failing the job if checkout still fails.
+Unlike upstream's build-only workflow, these CI services keep complete Git
+history for previous-result comparisons; do not add a blanket `--depth 1`.
+Invalidate the numbered source caches in both parent repositories when
+deploying this change, so old submodule configurations cannot be restored.
+
+### Service configuration
+
 Runtime helpers default to these RISE repositories:
 
 - `POSTCOMMIT_REPOSITORY=riseproject-dev/gcc-postcommit-ci`
