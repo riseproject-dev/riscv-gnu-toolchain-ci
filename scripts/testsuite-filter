@@ -164,7 +164,7 @@ def read_sum(sum_files: List[str]):
                 if l.startswith("Running target"):
                     # Parsing current running target.
                     current_target = l.split(" ")[-1].strip()
-                    unexpected_result[current_target] = list()
+                    unexpected_result.setdefault(current_target, [])
                 elif (
                     l.startswith("FAIL")
                     or l.startswith("XPASS")

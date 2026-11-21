@@ -285,7 +285,7 @@ def list_intersect(a: List[str], b: List[str]):
     return list((Counter(a) & Counter(b)).elements())
 
 
-def compare_testsuite_log(previous_log_path: str, current_log_path: str):
+def compare_testsuite_log(previous_log_path: str, current_log_path: str, tools=None):
     """
     returns (resolved_failures, unresolved_failures, new_failures)
     failures: Dict[tool combination label : Dict[unique testsuite name: Set[testsuite failure log]]]
@@ -293,6 +293,13 @@ def compare_testsuite_log(previous_log_path: str, current_log_path: str):
     """
     previous_failures = parse_testsuite_failures(previous_log_path)
     current_failures = parse_testsuite_failures(current_log_path)
+    if tools is not None:
+        previous_failures = {
+            d: lines for d, lines in previous_failures.items() if d.tool in tools
+        }
+        current_failures = {
+            d: lines for d, lines in current_failures.items() if d.tool in tools
+        }
 
     previous_failures_descriptions = set(previous_failures.keys())
     current_failures_descriptions = set(current_failures.keys())
@@ -483,12 +490,13 @@ def compare_logs(
     output_markdown: str,
     current_hash_committed: bool,
     prefix: str,
+    tools=None,
 ):
     if not is_result_valid(previous_log):
         raise RuntimeError(f"{previous_log} doesn't include Summary of the testsuite")
     if not is_result_valid(current_log):
         raise RuntimeError(f"{current_log} doesn't include Summary of the testsuite")
-    failures = compare_testsuite_log(previous_log, current_log)
+    failures = compare_testsuite_log(previous_log, current_log, tools)
     markdown = failures_to_markdown(
         failures, previous_hash, current_hash, current_hash_committed, prefix
     )
